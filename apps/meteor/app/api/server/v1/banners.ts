@@ -51,8 +51,9 @@ import { API } from '../api';
  */
 API.v1.addRoute(
 	'banners.getNew',
-	{ authRequired: true, validateParams: isBannersGetNewProps, deprecation: { version: '8.0.0', alternatives: ['banners/:id'] } },
+	{ authRequired: true, validateParams: isBannersGetNewProps },
 	{
+		// deprecated
 		async get() {
 			const { platform, bid: bannerId } = this.queryParams;
 
