@@ -1,65 +1,27 @@
+import { TEAM_TYPE } from '@rocket.chat/core-typings';
 import { expect } from 'chai';
 import { before, after, describe, it } from 'mocha';
 
 import { getCredentials, api, request, credentials, methodCall } from '../../data/api-data';
 import { updatePermission } from '../../data/permissions.helper';
+import { createRoom, deleteRoom } from '../../data/rooms.helper';
+import { createTeam, deleteTeam } from '../../data/teams.helper';
 import { adminUsername, password } from '../../data/user';
-import { createUser, login } from '../../data/users.helper';
+import { createUser, deleteUser, login } from '../../data/users.helper';
 
 describe('[Teams]', () => {
 	before((done) => getCredentials(done));
 
-	const community = `community${Date.now()}`;
-	let publicTeam = null;
-	let privateTeam = null;
-	let publicRoom = null;
-	let publicRoom2 = null;
-	let privateRoom = null;
-	let privateRoom2 = null;
-	let testUser;
-	let testUser2;
-	const testUserCredentials = {};
-
-	before('Create test users', (done) => {
-		let username = `user.test.${Date.now()}`;
-		let email = `${username}@rocket.chat`;
-		request
-			.post(api('users.create'))
-			.set(credentials)
-			.send({ email, name: username, username, password: username, roles: ['user'] })
-			.then((res) => {
-				testUser = res.body.user;
-
-				username = `user.test.${Date.now()}`;
-				email = `${username}@rocket.chat`;
-				request
-					.post(api('users.create'))
-					.set(credentials)
-					.send({ email, name: username, username, password: username })
-					.end((err, res) => {
-						testUser2 = res.body.user;
-						done();
-					});
-			});
-	});
-
-	before('login testUser', (done) => {
-		request
-			.post(api('login'))
-			.send({
-				user: testUser.username,
-				password: testUser.username,
-			})
-			.expect('Content-Type', 'application/json')
-			.expect(200)
-			.expect((res) => {
-				testUserCredentials['X-Auth-Token'] = res.body.data.authToken;
-				testUserCredentials['X-User-Id'] = res.body.data.userId;
-			})
-			.end(done);
-	});
-
 	describe('/teams.create', () => {
+		const name = `test-team-create-${Date.now()}`;
+		const createdTeams = [];
+		let testUser;
+
+		before(async () => {
+			testUser = await createUser();
+		});
+
+		after(() => Promise.all([...createdTeams.map((team) => deleteTeam(credentials, team.name)), deleteUser(testUser)]));
 		before(async () => {
 			return updatePermission('create-team', ['admin', 'user']);
 		});
@@ -73,7 +35,7 @@ describe('[Teams]', () => {
 				.post(api('teams.create'))
 				.set(credentials)
 				.send({
-					name: community,
+					name,
 					type: 0,
 				})
 				.expect('Content-Type', 'application/json')
@@ -82,7 +44,7 @@ describe('[Teams]', () => {
 					expect(res.body).to.have.property('success', true);
 					expect(res.body).to.have.property('team');
 					expect(res.body).to.have.nested.property('team._id');
-					publicTeam = res.body.team;
+					createdTeams.push(res.body.team);
 				})
 				.end(done);
 		});
@@ -102,7 +64,7 @@ describe('[Teams]', () => {
 					expect(res.body).to.have.property('success', true);
 					expect(res.body).to.have.property('team');
 					expect(res.body).to.have.nested.property('team._id');
-					publicTeam = res.body.team;
+					createdTeams.push(res.body.team);
 				})
 				.then((response) => {
 					const teamId = response.body.team._id;
@@ -131,7 +93,7 @@ describe('[Teams]', () => {
 				.post(api('teams.create'))
 				.set(credentials)
 				.send({
-					name: `test-team-${Date.now()}`,
+					name: `test-team-private-owner-${Date.now()}`,
 					type: 1,
 				})
 				.expect('Content-Type', 'application/json')
@@ -140,7 +102,7 @@ describe('[Teams]', () => {
 					expect(res.body).to.have.property('success', true);
 					expect(res.body).to.have.property('team');
 					expect(res.body).to.have.nested.property('team._id');
-					privateTeam = res.body.team;
+					createdTeams.push(res.body.team);
 				})
 				.then((response) => {
 					const teamId = response.body.team._id;
@@ -177,7 +139,7 @@ describe('[Teams]', () => {
 				.post(api('teams.create'))
 				.set(credentials)
 				.send({
-					name: community,
+					name,
 					type: 0,
 				})
 				.expect('Content-Type', 'application/json')
@@ -308,6 +270,14 @@ describe('[Teams]', () => {
 				.then(() => done());
 		});
 
+		after(() =>
+			Promise.all([
+				deleteTeam(credentials, teamName),
+				deleteRoom({ type: 'p', roomId: testTeam.roomId }),
+				deleteRoom({ type: 'c', roomId: channelToKeepId }),
+			]),
+		);
+
 		it('should convert the team to a channel, delete the specified room and move the other back to the workspace', (done) => {
 			request
 				.post(api('teams.convertToChannel'))
@@ -376,8 +346,16 @@ describe('[Teams]', () => {
 
 	describe('/teams.addMembers', () => {
 		let testTeam;
+		const teamName = `test-team-add-members-${Date.now()}`;
+		let testUser;
+		let testUser2;
+
+		before(async () => {
+			testUser = await createUser();
+			testUser2 = await createUser();
+		});
+
 		before('Create test team', (done) => {
-			const teamName = `test-team-${Date.now()}`;
 			request
 				.post(api('teams.create'))
 				.set(credentials)
@@ -390,6 +368,9 @@ describe('[Teams]', () => {
 					done();
 				});
 		});
+
+		after(() => Promise.all([deleteUser(testUser), deleteUser(testUser2), deleteTeam(credentials, teamName)]));
+
 		it('should add members to a public team', (done) => {
 			request
 				.post(api('teams.addMembers'))
@@ -458,8 +439,16 @@ describe('[Teams]', () => {
 
 	describe('/teams.members', () => {
 		let testTeam;
+		const teamName = `test-team-members-${Date.now()}`;
+		let testUser;
+		let testUser2;
+
+		before(async () => {
+			testUser = await createUser();
+			testUser2 = await createUser();
+		});
+
 		before('Create test team', (done) => {
-			const teamName = `test-team-${Date.now()}`;
 			request
 				.post(api('teams.create'))
 				.set(credentials)
@@ -472,6 +461,7 @@ describe('[Teams]', () => {
 					done();
 				});
 		});
+
 		before('Add members to team', (done) => {
 			request
 				.post(api('teams.addMembers'))
@@ -491,6 +481,9 @@ describe('[Teams]', () => {
 				})
 				.end(done);
 		});
+
+		after(() => Promise.all([deleteUser(testUser), deleteUser(testUser2), deleteTeam(credentials, teamName)]));
+
 		it('should list all the members from a public team', (done) => {
 			request
 				.get(api('teams.members'))
@@ -523,8 +516,8 @@ describe('[Teams]', () => {
 	});
 
 	describe('/teams.list', () => {
+		const teamName = `test-team-list-${Date.now()}`;
 		before('Create test team', (done) => {
-			const teamName = `test-team-${Date.now()}`;
 			request
 				.post(api('teams.create'))
 				.set(credentials)
@@ -534,6 +527,9 @@ describe('[Teams]', () => {
 				})
 				.end(done);
 		});
+
+		after(() => deleteTeam(credentials, teamName));
+
 		it('should list all teams', (done) => {
 			request
 				.get(api('teams.list'))
@@ -546,7 +542,7 @@ describe('[Teams]', () => {
 					expect(res.body).to.have.property('offset', 0);
 					expect(res.body).to.have.property('total');
 					expect(res.body).to.have.property('teams');
-					expect(res.body.teams).to.have.length.greaterThan(1);
+					expect(res.body.teams.length).equal(1);
 					expect(res.body.teams[0]).to.include.property('_id');
 					expect(res.body.teams[0]).to.include.property('_updatedAt');
 					expect(res.body.teams[0]).to.include.property('name');
@@ -564,18 +560,17 @@ describe('[Teams]', () => {
 	});
 
 	describe('/teams.listAll', () => {
+		let teamName;
 		before(async () => {
 			await updatePermission('view-all-teams', ['admin']);
-			const teamName = `test-team-${Date.now()}`;
+			teamName = `test-team-${Date.now()}`;
 			await request.post(api('teams.create')).set(credentials).send({
 				name: teamName,
 				type: 0,
 			});
 		});
 
-		after(async () => {
-			return updatePermission('view-all-teams', ['admin']);
-		});
+		after(() => Promise.all([deleteTeam(credentials, teamName), updatePermission('view-all-teams', ['admin'])]));
 
 		it('should list all teams', async () => {
 			await request
@@ -589,7 +584,7 @@ describe('[Teams]', () => {
 					expect(res.body).to.have.property('offset', 0);
 					expect(res.body).to.have.property('total');
 					expect(res.body).to.have.property('teams');
-					expect(res.body.teams).to.have.length.greaterThan(1);
+					expect(res.body.teams).to.be.an('array').that.is.not.empty;
 					expect(res.body.teams[0]).to.include.property('_id');
 					expect(res.body.teams[0]).to.include.property('_updatedAt');
 					expect(res.body.teams[0]).to.include.property('name');
@@ -620,8 +615,16 @@ describe('[Teams]', () => {
 
 	describe('/teams.updateMember', () => {
 		let testTeam;
+		const teamName = `test-team-update-member-${Date.now()}`;
+		let testUser;
+		let testUser2;
+
+		before(async () => {
+			testUser = await createUser();
+			testUser2 = await createUser();
+		});
+
 		before('Create test team', (done) => {
-			const teamName = `test-team-${Date.now()}`;
 			request
 				.post(api('teams.create'))
 				.set(credentials)
@@ -653,6 +656,9 @@ describe('[Teams]', () => {
 				})
 				.end(done);
 		});
+
+		after(() => Promise.all([deleteUser(testUser), deleteUser(testUser2), deleteTeam(credentials, teamName)]));
+
 		it("should update member's data in a public team", (done) => {
 			request
 				.post(api('teams.updateMember'))
@@ -705,8 +711,16 @@ describe('[Teams]', () => {
 
 	describe('/teams.removeMember', () => {
 		let testTeam;
+		const teamName = `test-team-remove-member-${Date.now()}`;
+		let testUser;
+		let testUser2;
+
+		before(async () => {
+			testUser = await createUser();
+			testUser2 = await createUser();
+		});
+
 		before('Create test team', (done) => {
-			const teamName = `test-team-${Date.now()}`;
 			request
 				.post(api('teams.create'))
 				.set(credentials)
@@ -719,6 +733,8 @@ describe('[Teams]', () => {
 					done();
 				});
 		});
+
+		after(() => Promise.all([deleteUser(testUser), deleteUser(testUser2), deleteTeam(credentials, teamName)]));
 
 		it('should not be able to remove the last owner', (done) => {
 			request
@@ -812,8 +828,16 @@ describe('[Teams]', () => {
 
 	describe('/teams.leave', () => {
 		let testTeam;
+		const teamName = `test-team-leave-${Date.now()}`;
+		let testUser;
+		let testUser2;
+
+		before(async () => {
+			testUser = await createUser();
+			testUser2 = await createUser();
+		});
+
 		before('Create test team', (done) => {
-			const teamName = `test-team-${Date.now()}`;
 			request
 				.post(api('teams.create'))
 				.set(credentials)
@@ -826,6 +850,8 @@ describe('[Teams]', () => {
 					done();
 				});
 		});
+
+		after(() => Promise.all([deleteUser(testUser), deleteUser(testUser2), deleteTeam(credentials, teamName)]));
 
 		it('should not be able to remove the last owner', (done) => {
 			request
@@ -901,20 +927,35 @@ describe('[Teams]', () => {
 	});
 
 	describe('/teams.info', () => {
+		const teamName = `test-team-info-${Date.now()}`;
+		let testTeam;
+		let testTeam2;
+		let testUser;
+		let testUserCredentials;
+
+		before(async () => {
+			testUser = await createUser();
+			testUserCredentials = await login(testUser.username, password);
+			testTeam = await createTeam(credentials, teamName, TEAM_TYPE.PUBLIC);
+			testTeam2 = await createTeam(credentials, `${teamName}-2`, TEAM_TYPE.PRIVATE);
+		});
+
+		after(() => Promise.all([deleteTeam(credentials, testTeam.name), deleteTeam(credentials, testTeam2.name), deleteUser(testUser)]));
+
 		it('should successfully get a team info by name', (done) => {
 			request
 				.get(api('teams.info'))
 				.set(credentials)
 				.query({
-					teamName: publicTeam.name,
+					teamName: testTeam.name,
 				})
 				.expect('Content-Type', 'application/json')
 				.expect(200)
 				.expect((response) => {
 					expect(response.body).to.have.property('success', true);
 					expect(response.body).to.have.property('teamInfo');
-					expect(response.body.teamInfo).to.have.property('_id', publicTeam._id);
-					expect(response.body.teamInfo).to.have.property('name', publicTeam.name);
+					expect(response.body.teamInfo).to.have.property('_id', testTeam._id);
+					expect(response.body.teamInfo).to.have.property('name', testTeam.name);
 				})
 				.then(() => done())
 				.catch(done);
@@ -924,15 +965,15 @@ describe('[Teams]', () => {
 				.get(api('teams.info'))
 				.set(credentials)
 				.query({
-					teamId: publicTeam._id,
+					teamId: testTeam._id,
 				})
 				.expect('Content-Type', 'application/json')
 				.expect(200)
 				.expect((response) => {
 					expect(response.body).to.have.property('success', true);
 					expect(response.body).to.have.property('teamInfo');
-					expect(response.body.teamInfo).to.have.property('_id', publicTeam._id);
-					expect(response.body.teamInfo).to.have.property('name', publicTeam.name);
+					expect(response.body.teamInfo).to.have.property('_id', testTeam._id);
+					expect(response.body.teamInfo).to.have.property('name', testTeam.name);
 				})
 				.then(() => done())
 				.catch(done);
@@ -958,7 +999,7 @@ describe('[Teams]', () => {
 				.get(api('teams.info'))
 				.set(testUserCredentials)
 				.query({
-					teamName: privateTeam.name,
+					teamName: testTeam2.name,
 				})
 				.expect('Content-Type', 'application/json')
 				.expect(403)
@@ -997,6 +1038,8 @@ describe('[Teams]', () => {
 					})
 					.then(() => done());
 			});
+
+			after(() => deleteTeam(credentials, tempTeamName));
 
 			it('should delete the team and the main room', (done) => {
 				request
@@ -1146,6 +1189,8 @@ describe('[Teams]', () => {
 					.then(() => done());
 			});
 
+			after(() => deleteRoom({ type: 'c', roomId: channel1Id }));
+
 			it('should delete the specified room and move the other back to the workspace', (done) => {
 				request
 					.post(api('teams.delete'))
@@ -1197,107 +1242,35 @@ describe('[Teams]', () => {
 	});
 
 	describe('/teams.addRooms', () => {
+		let privateRoom;
+		let privateRoom2;
 		let privateRoom3;
+		let publicRoom;
+		let publicRoom2;
+		let publicTeam;
+		let privateTeam;
+		let testUser;
+		let testUserCredentials;
 
-		before('create private channel', (done) => {
-			const channelName = `community-channel-private${Date.now()}`;
-			request
-				.post(api('groups.create'))
-				.set(credentials)
-				.send({
-					name: channelName,
-				})
-				.expect('Content-Type', 'application/json')
-				.expect(200)
-				.expect((res) => {
-					expect(res.body).to.have.property('success', true);
-					expect(res.body).to.have.nested.property('group._id');
-					expect(res.body).to.have.nested.property('group.name', channelName);
-					expect(res.body).to.have.nested.property('group.t', 'p');
-					expect(res.body).to.have.nested.property('group.msgs', 0);
-					privateRoom = res.body.group;
-				})
-				.end(done);
+		before(async () => {
+			testUser = await createUser();
+			testUserCredentials = await login(testUser.username, password);
+			privateRoom = (await createRoom({ type: 'p', name: `community-channel-private-1-${Date.now()}` })).body.group;
+			privateRoom2 = (await createRoom({ type: 'p', name: `community-channel-private-2-${Date.now()}` })).body.group;
+			privateRoom3 = (await createRoom({ type: 'p', name: `community-channel-private-3-${Date.now()}` })).body.group;
+			publicRoom = (await createRoom({ type: 'c', name: `community-channel-public-1-${Date.now()}` })).body.channel;
+			publicRoom2 = (await createRoom({ type: 'c', name: `community-channel-public-2-${Date.now()}` })).body.channel;
+			publicTeam = await createTeam(credentials, `team-name-c-${Date.now()}`, TEAM_TYPE.PUBLIC);
+			privateTeam = await createTeam(credentials, `team-name-p-${Date.now()}`, TEAM_TYPE.PRIVATE);
 		});
-		before('create another private channel', (done) => {
-			const channelName = `community-channel-private${Date.now()}`;
-			request
-				.post(api('groups.create'))
-				.set(credentials)
-				.send({
-					name: channelName,
-				})
-				.expect('Content-Type', 'application/json')
-				.expect(200)
-				.expect((res) => {
-					expect(res.body).to.have.property('success', true);
-					expect(res.body).to.have.nested.property('group._id');
-					expect(res.body).to.have.nested.property('group.name', channelName);
-					expect(res.body).to.have.nested.property('group.t', 'p');
-					expect(res.body).to.have.nested.property('group.msgs', 0);
-					privateRoom2 = res.body.group;
-				})
-				.end(done);
-		});
-		before('create yet another private channel', (done) => {
-			const channelName = `community-channel-private${Date.now()}`;
-			request
-				.post(api('groups.create'))
-				.set(credentials)
-				.send({
-					name: channelName,
-				})
-				.expect('Content-Type', 'application/json')
-				.expect(200)
-				.expect((res) => {
-					expect(res.body).to.have.property('success', true);
-					expect(res.body).to.have.nested.property('group._id');
-					expect(res.body).to.have.nested.property('group.name', channelName);
-					expect(res.body).to.have.nested.property('group.t', 'p');
-					expect(res.body).to.have.nested.property('group.msgs', 0);
-					privateRoom3 = res.body.group;
-				})
-				.end(done);
-		});
-		before('create public channel', (done) => {
-			const channelName = `community-channel-public${Date.now()}`;
-			request
-				.post(api('channels.create'))
-				.set(credentials)
-				.send({
-					name: channelName,
-				})
-				.expect('Content-Type', 'application/json')
-				.expect(200)
-				.expect((res) => {
-					expect(res.body).to.have.property('success', true);
-					expect(res.body).to.have.nested.property('channel._id');
-					expect(res.body).to.have.nested.property('channel.name', channelName);
-					expect(res.body).to.have.nested.property('channel.t', 'c');
-					expect(res.body).to.have.nested.property('channel.msgs', 0);
-					publicRoom = res.body.channel;
-				})
-				.end(done);
-		});
-		before('create another public channel', (done) => {
-			const channelName = `community-channel-public${Date.now()}`;
-			request
-				.post(api('channels.create'))
-				.set(credentials)
-				.send({
-					name: `${channelName}2`,
-				})
-				.expect('Content-Type', 'application/json')
-				.expect(200)
-				.expect((res) => {
-					expect(res.body).to.have.property('success', true);
-					expect(res.body).to.have.nested.property('channel._id');
-					expect(res.body).to.have.nested.property('channel.name', `${channelName}2`);
-					expect(res.body).to.have.nested.property('channel.t', 'c');
-					expect(res.body).to.have.nested.property('channel.msgs', 0);
-					publicRoom2 = res.body.channel;
-				})
-				.end(done);
+
+		after(async () => {
+			await Promise.all([deleteTeam(credentials, publicTeam.name), deleteTeam(credentials, privateTeam.name)]);
+			await Promise.all([
+				updatePermission('add-team-channel', ['admin', 'owner', 'moderator']),
+				...[privateRoom, privateRoom2, privateRoom3, publicRoom, publicRoom2].map((room) => deleteRoom({ type: room.t, roomId: room._id })),
+				deleteUser(testUser),
+			]);
 		});
 
 		it('should throw an error if no permission', (done) => {
@@ -1454,34 +1427,59 @@ describe('[Teams]', () => {
 	describe('/teams.listRooms', () => {
 		let testUser;
 		let testUserCredentials;
-		before('Create test user', (done) => {
-			const username = `user.test.${Date.now()}`;
-			const email = `${username}@rocket.chat`;
-			request
-				.post(api('users.create'))
+		let privateTeam;
+		let publicTeam;
+		let privateRoom;
+		let publicRoom;
+		let publicRoom2;
+
+		before(async () => {
+			testUser = await createUser();
+			testUserCredentials = await login(testUser.username, password);
+			privateTeam = await createTeam(credentials, `teamName-private-${Date.now()}`, TEAM_TYPE.PRIVATE);
+			publicTeam = await createTeam(testUserCredentials, `teamName-public-${Date.now()}`, TEAM_TYPE.PUBLIC);
+
+			privateRoom = (await createRoom({ type: 'p', name: `test-p-${Date.now()}` })).body.group;
+			publicRoom = (await createRoom({ type: 'c', name: `test-c-${Date.now()}` })).body.channel;
+			publicRoom2 = (await createRoom({ type: 'c', name: `test-c2-${Date.now()}` })).body.channel;
+
+			await request
+				.post(api('teams.addRooms'))
 				.set(credentials)
-				.send({ email, name: username, username, password: username })
-				.end((err, res) => {
-					testUser = res.body.user;
-					done();
+				.send({
+					rooms: [privateRoom._id],
+					teamId: publicTeam._id,
+				});
+			await request
+				.post(api('teams.addRooms'))
+				.set(credentials)
+				.send({
+					rooms: [publicRoom._id],
+					teamId: publicTeam._id,
+				});
+
+			await request
+				.post(api('teams.addRooms'))
+				.set(credentials)
+				.send({
+					rooms: [publicRoom2._id],
+					teamId: privateTeam._id,
 				});
 		});
-		before('Login as test user', (done) => {
-			request
-				.post(api('login'))
-				.send({
-					user: testUser.username,
-					password: testUser.username,
-				})
-				.expect('Content-Type', 'application/json')
-				.expect(200)
-				.expect((res) => {
-					testUserCredentials = {};
-					testUserCredentials['X-Auth-Token'] = res.body.data.authToken;
-					testUserCredentials['X-User-Id'] = res.body.data.userId;
-				})
-				.end(done);
-		});
+
+		after(() =>
+			Promise.all([
+				updatePermission('view-all-teams', ['admin']),
+				updatePermission('view-all-team-channels', ['admin', 'owner']),
+				deleteUser(testUser),
+				deleteTeam(credentials, privateTeam.name),
+				deleteTeam(credentials, publicTeam.name),
+				deleteRoom({ type: 'p', roomId: privateRoom._id }),
+				deleteRoom({ type: 'c', roomId: publicRoom._id }),
+				deleteRoom({ type: 'c', roomId: publicRoom2._id }),
+			]),
+		);
+
 		it('should throw an error if team is private and no permission', (done) => {
 			updatePermission('view-all-teams', []).then(() => {
 				request
@@ -1578,7 +1576,7 @@ describe('[Teams]', () => {
 							expect(res.body).to.have.property('success', true);
 							expect(res.body).to.have.property('rooms');
 							expect(res.body.rooms).to.be.an('array');
-							expect(res.body.rooms.length).to.equal(2);
+							expect(res.body.rooms.length).to.equal(1);
 						})
 						.end(done);
 				});
@@ -1601,7 +1599,7 @@ describe('[Teams]', () => {
 							expect(res.body).to.have.property('success', true);
 							expect(res.body).to.have.property('rooms');
 							expect(res.body.rooms).to.be.an('array');
-							expect(res.body.rooms.length).to.equal(2);
+							expect(res.body.rooms.length).to.equal(1);
 						})
 						.end(done);
 				});
@@ -1610,6 +1608,30 @@ describe('[Teams]', () => {
 	});
 
 	describe('/teams.updateRoom', () => {
+		let publicRoom;
+		let publicTeam;
+		const name = `teamName-update-room-${Date.now()}`;
+
+		before(async () => {
+			publicRoom = (await createRoom({ type: 'c', name: `public-update-room-${Date.now()}` })).body.channel;
+			publicTeam = await createTeam(credentials, name, TEAM_TYPE.PUBLIC);
+			await request
+				.post(api('teams.addRooms'))
+				.set(credentials)
+				.send({
+					rooms: [publicRoom._id],
+					teamId: publicTeam._id,
+				});
+		});
+
+		after(async () => {
+			await deleteTeam(credentials, name);
+			await Promise.all([
+				updatePermission('edit-team-channel', ['admin', 'owner', 'moderator']),
+				deleteRoom({ type: 'c', roomId: publicRoom._id }),
+			]);
+		});
+
 		it('should throw an error if no permission', (done) => {
 			updatePermission('edit-team-channel', []).then(() => {
 				request
@@ -1653,6 +1675,38 @@ describe('[Teams]', () => {
 	});
 
 	describe('/teams.removeRoom', () => {
+		let publicRoom;
+		let publicTeam;
+		const name = `teamName-remove-room-${Date.now()}`;
+
+		before(async () => {
+			publicRoom = (await createRoom({ type: 'c', name: `public-remove-room-${Date.now()}` })).body.channel;
+			publicTeam = await createTeam(credentials, name, TEAM_TYPE.PUBLIC);
+			await request
+				.post(api('teams.addRooms'))
+				.set(credentials)
+				.send({
+					rooms: [publicRoom._id],
+					teamId: publicTeam._id,
+				});
+		});
+
+		after(async () => {
+			await deleteTeam(credentials, name);
+			await Promise.all([
+				updatePermission('edit-team-channel', ['admin', 'owner', 'moderator']),
+				deleteRoom({ type: 'c', roomId: publicRoom._id }),
+			]);
+		});
+
+		after(() =>
+			Promise.all([
+				updatePermission('remove-team-channel', ['admin', 'owner', 'moderator']),
+				deleteRoom({ type: 'c', roomId: publicRoom._id }),
+				deleteTeam(credentials, name),
+			]),
+		);
+
 		it('should throw an error if no permission', (done) => {
 			updatePermission('remove-team-channel', []).then(() => {
 				request
@@ -1699,9 +1753,14 @@ describe('[Teams]', () => {
 		let testTeam;
 		let testTeam2;
 		let testTeam3;
+		const teamName = `test-team-name1${Date.now()}`;
+		const teamName2 = `test-team-name2${Date.now()}`;
+		const teamName3 = `test-team-name3${Date.now()}`;
+		const testTeamName = `test-team-name-changed${Date.now()}-1`;
+		const testTeamName2 = `test-team-name-changed${Date.now()}-2`;
+		let unauthorizedUser;
 
 		before('Create test team', (done) => {
-			const teamName = `test-team-name${Date.now()}`;
 			request
 				.post(api('teams.create'))
 				.set(credentials)
@@ -1716,7 +1775,6 @@ describe('[Teams]', () => {
 		});
 
 		before('Create test team', (done) => {
-			const teamName2 = `test-team-name${Date.now()}`;
 			request
 				.post(api('teams.create'))
 				.set(credentials)
@@ -1731,7 +1789,6 @@ describe('[Teams]', () => {
 		});
 
 		before('Create test team', (done) => {
-			const teamName3 = `test-team-name${Date.now()}`;
 			request
 				.post(api('teams.create'))
 				.set(credentials)
@@ -1745,8 +1802,15 @@ describe('[Teams]', () => {
 				});
 		});
 
+		before(async () => {
+			unauthorizedUser = await createUser();
+		});
+
+		after(() =>
+			Promise.all([...[testTeamName, testTeamName2, teamName3].map((name) => deleteTeam(credentials, name)), deleteUser(unauthorizedUser)]),
+		);
+
 		it('should update team name', async () => {
-			const testTeamName = `test-team-name-changed${Date.now()}`;
 			const updateResponse = await request
 				.post(api('teams.update'))
 				.set(credentials)
@@ -1788,6 +1852,46 @@ describe('[Teams]', () => {
 			expect(teamInfo).to.have.property('type', 1);
 		});
 
+		it('should update team name and type at once', async () => {
+			const updateResponse = await request
+				.post(api('teams.update'))
+				.set(credentials)
+				.send({
+					teamId: testTeam2._id,
+					data: {
+						name: testTeamName2,
+						type: 1,
+					},
+				});
+
+			expect(updateResponse.body).to.have.property('success', true);
+
+			const infoResponse = await request.get(api('teams.info')).set(credentials).query({ teamId: testTeam2._id });
+
+			expect(infoResponse.body).to.have.property('success', true);
+
+			const { teamInfo } = infoResponse.body;
+			expect(teamInfo).to.have.property('type', 1);
+		});
+
+		it('should not update team if permissions are not met', async () => {
+			const unauthorizedUserCredentials = await login(unauthorizedUser.username, password);
+
+			const res = await request
+				.post(api('teams.update'))
+				.set(unauthorizedUserCredentials)
+				.send({
+					teamId: testTeam._id,
+					data: {
+						name: 'anyname',
+					},
+				})
+				.expect('Content-Type', 'application/json')
+				.expect(403);
+
+			expect(res.body).to.have.property('success', false);
+		});
+
 		describe('should update team room to default and invite users with the right notification preferences', () => {
 			let userWithPrefs;
 			let userCredentials;
@@ -1797,21 +1901,18 @@ describe('[Teams]', () => {
 				userWithPrefs = await createUser();
 				userCredentials = await login(userWithPrefs.username, password);
 
-				createdRoom = await request
-					.post(api('channels.create'))
-					.set(credentials)
-					.send({
-						name: `${Date.now()}-testTeam3`,
-					});
+				createdRoom = (await createRoom({ type: 'c', name: `${Date.now()}-testTeam3` })).body.channel;
 
 				await request
 					.post(api('teams.addRooms'))
 					.set(credentials)
 					.send({
-						rooms: [createdRoom.body.channel._id],
+						rooms: [createdRoom._id],
 						teamId: testTeam3._id,
 					});
 			});
+
+			after(() => Promise.all([deleteUser(userWithPrefs), deleteRoom({ type: 'c', roomId: createdRoom._id })]));
 
 			it('should update user prefs', async () => {
 				await request
@@ -1846,7 +1947,7 @@ describe('[Teams]', () => {
 
 			it('should update team channel to auto-join', async () => {
 				const response = await request.post(api('teams.updateRoom')).set(credentials).send({
-					roomId: createdRoom.body.channel._id,
+					roomId: createdRoom._id,
 					isDefault: true,
 				});
 				expect(response.body).to.have.property('success', true);
@@ -1857,7 +1958,7 @@ describe('[Teams]', () => {
 					.get(api('subscriptions.getOne'))
 					.set(userCredentials)
 					.query({
-						roomId: createdRoom.body.channel._id,
+						roomId: createdRoom._id,
 					})
 					.expect('Content-Type', 'application/json')
 					.expect(200)
@@ -1868,48 +1969,6 @@ describe('[Teams]', () => {
 					})
 					.end(done);
 			});
-		});
-
-		it('should update team name and type at once', async () => {
-			const testTeamName = `test-team-name-changed${Date.now()}`;
-			const updateResponse = await request
-				.post(api('teams.update'))
-				.set(credentials)
-				.send({
-					teamId: testTeam2._id,
-					data: {
-						name: testTeamName,
-						type: 1,
-					},
-				});
-
-			expect(updateResponse.body).to.have.property('success', true);
-
-			const infoResponse = await request.get(api('teams.info')).set(credentials).query({ teamId: testTeam2._id });
-
-			expect(infoResponse.body).to.have.property('success', true);
-
-			const { teamInfo } = infoResponse.body;
-			expect(teamInfo).to.have.property('type', 1);
-		});
-
-		it('should not update team if permissions are not met', async () => {
-			const unauthorizedUser = await createUser();
-			const unauthorizedUserCredentials = await login(unauthorizedUser.username, password);
-
-			const res = await request
-				.post(api('teams.update'))
-				.set(unauthorizedUserCredentials)
-				.send({
-					teamId: testTeam._id,
-					data: {
-						name: 'anyname',
-					},
-				})
-				.expect('Content-Type', 'application/json')
-				.expect(403);
-
-			expect(res.body).to.have.property('success', false);
 		});
 	});
 });
