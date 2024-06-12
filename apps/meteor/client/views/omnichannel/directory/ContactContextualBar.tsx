@@ -1,4 +1,4 @@
-import { useRoute, useRouteParameter, useTranslation } from '@rocket.chat/ui-contexts';
+import { useRoute, useRouteParameter, useRouter, useTranslation } from '@rocket.chat/ui-contexts';
 import React, { useMemo } from 'react';
 
 import {
@@ -8,9 +8,9 @@ import {
 	ContextualbarTitle,
 	ContextualbarClose,
 } from '../../../components/Contextualbar';
-import ContactEditWithData from './contacts/contextualBar/ContactEditWithData';
-import ContactInfo from './contacts/contextualBar/ContactInfo';
-import ContactNewEdit from './contacts/contextualBar/ContactNewEdit';
+import ContactInfo from '../contactInfo/ContactInfo';
+import ContactNewEdit from '../contactInfo/EditContactInfo';
+import ContactEditWithData from '../contactInfo/EditContactInfoWithData';
 
 const HEADER_OPTIONS = {
 	new: { icon: 'user', title: 'New_contact' },
@@ -21,11 +21,14 @@ const HEADER_OPTIONS = {
 type BarOptions = keyof typeof HEADER_OPTIONS;
 
 const ContactContextualBar = () => {
+	const t = useTranslation();
+
 	const directoryRoute = useRoute('omnichannel-directory');
 	const bar = (useRouteParameter('bar') || 'info') as BarOptions;
 	const contactId = useRouteParameter('id') || '';
 
-	const t = useTranslation();
+	const { getRouteParameters } = useRouter();
+	const params = getRouteParameters();
 
 	const handleContactsContextualbarCloseButtonClick = () => {
 		directoryRoute.push({ page: 'contacts' });
@@ -37,18 +40,21 @@ const ContactContextualBar = () => {
 
 	const header = useMemo(() => HEADER_OPTIONS[bar] || HEADER_OPTIONS.info, [bar]);
 
-	return (
-		<Contextualbar>
-			<ContextualbarHeader>
-				<ContextualbarIcon name={header.icon} />
-				<ContextualbarTitle>{t(header.title)}</ContextualbarTitle>
-				<ContextualbarClose onClick={handleContactsContextualbarCloseButtonClick} />
-			</ContextualbarHeader>
-			{bar === 'new' && <ContactNewEdit id={contactId} close={handleContactsContextualbarCloseButtonClick} />}
-			{bar === 'info' && <ContactInfo id={contactId} />}
-			{bar === 'edit' && <ContactEditWithData id={contactId} close={handleContactsContextualbarBackButtonClick} />}
-		</Contextualbar>
-	);
+	console.log(params);
+
+	// return (
+	// 	<Contextualbar>
+	// 		<ContextualbarHeader>
+	// 			<ContextualbarIcon name={header.icon} />
+	// 			<ContextualbarTitle>{t(header.title)}</ContextualbarTitle>
+	// 			<ContextualbarClose onClick={handleContactsContextualbarCloseButtonClick} />
+	// 		</ContextualbarHeader>
+	// 		{bar === 'new' && <ContactNewEdit id={contactId} close={handleContactsContextualbarCloseButtonClick} />}
+	// 		{bar === 'edit' && <ContactEditWithData id={contactId} close={handleContactsContextualbarBackButtonClick} />}
+
+	// 	</Contextualbar>
+	// );
+	return <ContactInfo id={contactId} />;
 };
 
 export default ContactContextualBar;

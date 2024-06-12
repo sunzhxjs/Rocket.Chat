@@ -117,6 +117,8 @@ const RoomToolboxProvider = ({ children }: RoomToolboxProviderProps) => {
 		[actions, tab, context, openTab, closeTab],
 	);
 
+	console.log(contextValue);
+
 	return <RoomToolboxContext.Provider value={contextValue}>{children}</RoomToolboxContext.Provider>;
 };
 

@@ -12,58 +12,64 @@ import CallTab from './calls/CallTab';
 import ChatTab from './chats/ChatTab';
 import ContactTab from './contacts/ContactTab';
 
-const DEFAULT_TAB = 'contacts';
+type DirectoryPages = 'contacts' | 'chats' | 'calls';
 
 const OmnichannelDirectoryPage = (): ReactElement => {
 	const t = useTranslation();
 	const router = useRouter();
 	const page = useRouteParameter('page');
 	const bar = useRouteParameter('bar');
-	const canViewDirectory = usePermission('view-omnichannel-contact-center');
+	const tab = useRouteParameter('tab');
 
-	useEffect(
-		() =>
-			router.subscribeToRouteChange(() => {
-				if (router.getRouteName() !== 'omnichannel-directory' || !!router.getRouteParameters().page) {
-					return;
-				}
+	// useEffect(
+	// 	() =>
+	// 		router.subscribeToRouteChange(() => {
+	// 			if (router.getRouteName() !== 'omnichannel-directory' || !!router.getRouteParameters().page) {
+	// 				return;
+	// 			}
 
-				router.navigate({
-					name: 'omnichannel-directory',
-					params: { page: DEFAULT_TAB },
-				});
-			}),
-		[router],
-	);
+	// 			router.navigate({
+	// 				name: 'omnichannel-directory',
+	// 				params: { page: 'contacts' },
+	// 			});
+	// 		}),
+	// 	[router],
+	// );
 
-	const handleTabClick = useCallback((tab) => () => router.navigate({ name: 'omnichannel-directory', params: { tab } }), [router]);
+	useEffect(() => {
+		console.log(tab);
+
+		if (!page) {
+			router.navigate(`/omnichannel-directory/contacts`);
+		}
+	}, [page, router]);
+
+	const handleTabClick = useCallback((page) => router.navigate(`/omnichannel-directory/${page}`), [router]);
 
 	const chatReload = () => queryClient.invalidateQueries({ queryKey: ['current-chats'] });
-
-	if (!canViewDirectory) {
-		return <NotAuthorizedPage />;
-	}
 
 	return (
 		<Page flexDirection='row'>
 			<Page>
 				<PageHeader title={t('Omnichannel_Contact_Center')} />
 				<Tabs flexShrink={0}>
-					<Tabs.Item selected={page === 'contacts'} onClick={handleTabClick('contacts')}>
+					<Tabs.Item selected={page === 'contacts'} onClick={() => handleTabClick('contacts')}>
 						{t('Contacts')}
 					</Tabs.Item>
-					<Tabs.Item selected={page === 'chats'} onClick={handleTabClick('chats')}>
-						{t('Chats' as 'color')}
+					<Tabs.Item selected={page === 'chats'} onClick={() => handleTabClick('chats')}>
+						{t('Chats')}
 					</Tabs.Item>
-					<Tabs.Item selected={page === 'calls'} onClick={handleTabClick('calls')}>
-						{t('Calls' as 'color')}
+					<Tabs.Item selected={page === 'calls'} onClick={() => handleTabClick('calls')}>
+						{t('Calls')}
 					</Tabs.Item>
 				</Tabs>
 				<PageContent>
-					{(page === 'contacts' && <ContactTab />) || (page === 'chats' && <ChatTab />) || (page === 'calls' && <CallTab />)}
+					{page === 'contacts' && <ContactTab />}
+					{page === 'chats' && <ChatTab />}
+					{page === 'calls' && <CallTab />}
 				</PageContent>
 			</Page>
-			{bar && (
+			{tab && (
 				<ContextualbarDialog>
 					<ContextualBar chatReload={chatReload} />
 				</ContextualbarDialog>
