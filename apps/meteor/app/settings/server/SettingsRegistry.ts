@@ -64,14 +64,16 @@ type addGroupCallback = (this: {
 	with(options: ISettingAddOptions, cb: addGroupCallback): Promise<void>;
 }) => Promise<void>;
 
-type ISettingAddOptions = Partial<ISetting>;
+type ISettingAction = { trigger?: <T>() => Promise<T> } & ISetting;
+
+type ISettingAddOptions = Partial<ISettingAction>;
 
 const compareSettingsIgnoringKeys =
 	(keys: Array<keyof ISetting>) =>
-	(a: ISetting, b: ISetting): boolean =>
-		[...new Set([...Object.keys(a), ...Object.keys(b)])]
-			.filter((key) => !keys.includes(key as keyof ISetting))
-			.every((key) => isEqual(a[key as keyof ISetting], b[key as keyof ISetting]));
+		(a: ISetting, b: ISetting): boolean =>
+			[...new Set([...Object.keys(a), ...Object.keys(b)])]
+				.filter((key) => !keys.includes(key as keyof ISetting))
+				.every((key) => isEqual(a[key as keyof ISetting], b[key as keyof ISetting]));
 
 const compareSettings = compareSettingsIgnoringKeys([
 	'value',
@@ -98,7 +100,7 @@ export class SettingsRegistry {
 	/*
 	 * Add a setting
 	 */
-	async add(_id: string, value: SettingValue, { sorter, section, group, ...options }: ISettingAddOptions = {}): Promise<void> {
+	async add(_id: string, value: SettingValue, { sorter, section, group, trigger, ...options }: ISettingAddOptions = {}): Promise<void> {
 		if (!_id || value == null) {
 			throw new Error('Invalid arguments');
 		}
@@ -138,16 +140,23 @@ export class SettingsRegistry {
 
 		const settingFromCodeOverwritten = overwriteSetting(settingFromCode);
 
-		const settingStored = this.store.getSetting(_id);
+		const settingStored = trigger ? settingFromCode : this.store.getSetting(_id);
+
 		const settingStoredOverwritten = settingStored && overwriteSetting(settingStored);
+
+		const settingOverwrittenDefault = overrideSetting(settingFromCode);
+
+		const isOverwritten = settingFromCode !== settingFromCodeOverwritten || (settingStored && settingStored !== settingStoredOverwritten);
+
+		const setting = isOverwritten ? settingFromCodeOverwritten : settingOverwrittenDefault;
+
+		const settingWithTrigger = trigger ? Object.assign(setting, trigger) : setting;
 
 		try {
 			validateSetting(settingFromCode._id, settingFromCode.type, settingFromCode.value);
 		} catch (e) {
 			IS_DEVELOPMENT && SystemLogger.error(`Invalid setting code ${_id}: ${(e as Error).message}`);
 		}
-
-		const isOverwritten = settingFromCode !== settingFromCodeOverwritten || (settingStored && settingStored !== settingStoredOverwritten);
 
 		const { _id: _, ...settingProps } = settingFromCodeOverwritten;
 
@@ -166,6 +175,9 @@ export class SettingsRegistry {
 			})();
 
 			await this.saveUpdatedSetting(_id, updatedProps, removedKeys);
+
+			this.store.set(settingWithTrigger);
+
 			return;
 		}
 
@@ -175,6 +187,8 @@ export class SettingsRegistry {
 				const removedKeys = Object.keys(settingStored).filter((key) => !['_updatedAt'].includes(key) && !overwrittenKeys.includes(key));
 
 				await this.saveUpdatedSetting(_id, settingProps, removedKeys);
+
+				this.store.set(settingWithTrigger);
 			}
 			return;
 		}
@@ -188,13 +202,9 @@ export class SettingsRegistry {
 			return;
 		}
 
-		const settingOverwrittenDefault = overrideSetting(settingFromCode);
-
-		const setting = isOverwritten ? settingFromCodeOverwritten : settingOverwrittenDefault;
-
 		await this.model.insertOne(setting); // no need to emit unless we remove the oplog
 
-		this.store.set(setting);
+		this.store.set(settingWithTrigger);
 	}
 
 	/*
@@ -227,40 +237,40 @@ export class SettingsRegistry {
 
 		const addWith =
 			(preset: ISettingAddOptions) =>
-			(id: string, value: SettingValue, options: ISettingAddOptions = {}): Promise<void> => {
-				const mergedOptions = { ...preset, ...options };
-				return this.add(id, value, mergedOptions);
-			};
+				(id: string, value: SettingValue, options: ISettingAddOptions = {}): Promise<void> => {
+					const mergedOptions = { ...preset, ...options };
+					return this.add(id, value, mergedOptions);
+				};
 		const sectionSetWith =
 			(preset: ISettingAddOptions) =>
-			(options: ISettingAddOptions, cb: addSectionCallback): Promise<void> => {
-				const mergedOptions = { ...preset, ...options };
-				return cb.call({
-					add: addWith(mergedOptions),
-					with: sectionSetWith(mergedOptions),
-				});
-			};
+				(options: ISettingAddOptions, cb: addSectionCallback): Promise<void> => {
+					const mergedOptions = { ...preset, ...options };
+					return cb.call({
+						add: addWith(mergedOptions),
+						with: sectionSetWith(mergedOptions),
+					});
+				};
 		const sectionWith =
 			(preset: ISettingAddOptions) =>
-			(section: string, cb: addSectionCallback): Promise<void> => {
-				const mergedOptions = { ...preset, section };
-				return cb.call({
-					add: addWith(mergedOptions),
-					with: sectionSetWith(mergedOptions),
-				});
-			};
+				(section: string, cb: addSectionCallback): Promise<void> => {
+					const mergedOptions = { ...preset, section };
+					return cb.call({
+						add: addWith(mergedOptions),
+						with: sectionSetWith(mergedOptions),
+					});
+				};
 
 		const groupSetWith =
 			(preset: ISettingAddOptions) =>
-			(options: ISettingAddOptions, cb: addGroupCallback): Promise<void> => {
-				const mergedOptions = { ...preset, ...options };
+				(options: ISettingAddOptions, cb: addGroupCallback): Promise<void> => {
+					const mergedOptions = { ...preset, ...options };
 
-				return cb.call({
-					add: addWith(mergedOptions),
-					section: sectionWith(mergedOptions),
-					with: groupSetWith(mergedOptions),
-				});
-			};
+					return cb.call({
+						add: addWith(mergedOptions),
+						section: sectionWith(mergedOptions),
+						with: groupSetWith(mergedOptions),
+					});
+				};
 
 		return groupSetWith({ group: _id })({}, callback);
 	}
