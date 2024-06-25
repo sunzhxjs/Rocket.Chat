@@ -73,6 +73,22 @@ describe('[Users]', function () {
 			});
 	});
 
+	it('should fail when trying to set keys for a user with keys already set', async () => {
+		await request
+			.post(api('e2e.setUserPublicAndPrivateKeys'))
+			.set(userCredentials)
+			.send({
+				private_key: 'test',
+				public_key: 'test',
+			})
+			.expect('Content-Type', 'application/json')
+			.expect(400)
+			.expect((res) => {
+				expect(res.body).to.have.property('success', false);
+				expect(res.body).to.have.property('error', 'Keys already set [error-keys-already-set]');
+			});
+	});
+
 	describe('[/users.create]', () => {
 		before(async () => clearCustomFields());
 		after(async () => clearCustomFields());
@@ -2644,7 +2660,7 @@ describe('[Users]', function () {
 				.expect(403)
 				.expect((res) => {
 					expect(res.body).to.have.property('success', false);
-					expect(res.body).to.have.property('error', 'unauthorized');
+					expect(res.body).to.have.property('error', 'User does not have the permissions required for this action [error-unauthorized]');
 				});
 		});
 
@@ -2907,10 +2923,10 @@ describe('[Users]', function () {
 						.get(api('users.getPersonalAccessTokens'))
 						.set(credentials)
 						.expect('Content-Type', 'application/json')
-						.expect(400)
+						.expect(403)
 						.expect((res) => {
 							expect(res.body).to.have.property('success', false);
-							expect(res.body.errorType).to.be.equal('not-authorized');
+							expect(res.body.error).to.be.equal('User does not have the permissions required for this action [error-unauthorized]');
 						})
 						.end(done);
 				});
@@ -3031,6 +3047,7 @@ describe('[Users]', function () {
 					.expect(403)
 					.expect((res) => {
 						expect(res.body).to.have.property('success', false);
+						expect(res.body).to.have.property('error', 'User does not have the permissions required for this action [error-unauthorized]');
 					})
 					.end(done);
 			});
@@ -3047,6 +3064,7 @@ describe('[Users]', function () {
 				.expect(403)
 				.expect((res) => {
 					expect(res.body).to.have.property('success', false);
+					expect(res.body).to.have.property('error', 'User does not have the permissions required for this action [error-unauthorized]');
 				})
 				.end(done);
 		});
@@ -3063,6 +3081,7 @@ describe('[Users]', function () {
 					.expect(403)
 					.expect((res) => {
 						expect(res.body).to.have.property('success', false);
+						expect(res.body).to.have.property('error', 'User does not have the permissions required for this action [error-unauthorized]');
 					})
 					.end(done);
 			});
@@ -3277,7 +3296,7 @@ describe('[Users]', function () {
 					.expect(403)
 					.expect((res) => {
 						expect(res.body).to.have.property('success', false);
-						expect(res.body).to.have.property('error', 'unauthorized');
+						expect(res.body).to.have.property('error', 'User does not have the permissions required for this action [error-unauthorized]');
 					})
 					.end(done);
 			});

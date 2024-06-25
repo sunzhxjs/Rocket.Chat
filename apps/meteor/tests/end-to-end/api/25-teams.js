@@ -1,11 +1,11 @@
 import { TEAM_TYPE } from '@rocket.chat/core-typings';
 import { expect } from 'chai';
-import { before, describe, it, after } from 'mocha';
+import { after, afterEach, before, beforeEach, describe, it } from 'mocha';
 
 import { getCredentials, api, request, credentials, methodCall } from '../../data/api-data';
-import { updatePermission } from '../../data/permissions.helper';
+import { updatePermission, updateSetting } from '../../data/permissions.helper';
 import { createRoom, deleteRoom } from '../../data/rooms.helper';
-import { createTeam, deleteTeam } from '../../data/teams.helper';
+import { addMembers, createTeam, deleteTeam } from '../../data/teams.helper';
 import { adminUsername, password } from '../../data/user';
 import { createUser, deleteUser, login } from '../../data/users.helper';
 
@@ -22,6 +22,13 @@ describe('[Teams]', () => {
 		});
 
 		after(() => Promise.all([...createdTeams.map((team) => deleteTeam(credentials, team.name)), deleteUser(testUser)]));
+		before(async () => {
+			return updatePermission('create-team', ['admin', 'user']);
+		});
+
+		after(async () => {
+			return updatePermission('create-team', ['admin', 'user']);
+		});
 
 		it('should create a public team', (done) => {
 			request
@@ -143,6 +150,23 @@ describe('[Teams]', () => {
 					expect(res.body.error).to.be.equal('team-name-already-exists');
 				})
 				.end(done);
+		});
+
+		it('should not allow creating a team when the user does NOT have the create-team permission', async () => {
+			await updatePermission('create-team', []);
+			await request
+				.post(api('teams.create'))
+				.set(credentials)
+				.send({
+					name: `test-team-${Date.now()}`,
+					type: 0,
+				})
+				.expect('Content-Type', 'application/json')
+				.expect(403)
+				.expect((res) => {
+					expect(res.body).to.have.property('success', false);
+					expect(res.body).to.have.property('error', 'User does not have the permissions required for this action [error-unauthorized]');
+				});
 		});
 	});
 
@@ -532,6 +556,60 @@ describe('[Teams]', () => {
 					expect(res.body.teams[0]).to.include.property('numberOfUsers');
 				})
 				.end(done);
+		});
+	});
+
+	describe('/teams.listAll', () => {
+		let teamName;
+		before(async () => {
+			await updatePermission('view-all-teams', ['admin']);
+			teamName = `test-team-${Date.now()}`;
+			await request.post(api('teams.create')).set(credentials).send({
+				name: teamName,
+				type: 0,
+			});
+		});
+
+		after(() => Promise.all([deleteTeam(credentials, teamName), updatePermission('view-all-teams', ['admin'])]));
+
+		it('should list all teams', async () => {
+			await request
+				.get(api('teams.listAll'))
+				.set(credentials)
+				.expect('Content-Type', 'application/json')
+				.expect(200)
+				.expect((res) => {
+					expect(res.body).to.have.property('success', true);
+					expect(res.body).to.have.property('count');
+					expect(res.body).to.have.property('offset', 0);
+					expect(res.body).to.have.property('total');
+					expect(res.body).to.have.property('teams');
+					expect(res.body.teams).to.be.an('array').that.is.not.empty;
+					expect(res.body.teams[0]).to.include.property('_id');
+					expect(res.body.teams[0]).to.include.property('_updatedAt');
+					expect(res.body.teams[0]).to.include.property('name');
+					expect(res.body.teams[0]).to.include.property('type');
+					expect(res.body.teams[0]).to.include.property('roomId');
+					expect(res.body.teams[0]).to.include.property('createdBy');
+					expect(res.body.teams[0].createdBy).to.include.property('_id');
+					expect(res.body.teams[0].createdBy).to.include.property('username');
+					expect(res.body.teams[0]).to.include.property('createdAt');
+					expect(res.body.teams[0]).to.include.property('rooms');
+					expect(res.body.teams[0]).to.include.property('numberOfUsers');
+				});
+		});
+
+		it('should return an error when the user does NOT have the view-all-teams permission', async () => {
+			await updatePermission('view-all-teams', []);
+			await request
+				.get(api('teams.listAll'))
+				.set(credentials)
+				.expect('Content-Type', 'application/json')
+				.expect(403)
+				.expect((res) => {
+					expect(res.body).to.have.property('success', false);
+					expect(res.body).to.have.property('error', 'User does not have the permissions required for this action [error-unauthorized]');
+				});
 		});
 	});
 
@@ -1592,6 +1670,80 @@ describe('[Teams]', () => {
 						expect(res.body.room).to.have.property('teamDefault', true);
 					})
 					.end(done);
+			});
+		});
+
+		describe('team auto-join', () => {
+			let testTeam;
+			let createdRoom;
+			let testUser1;
+			let testUser2;
+
+			before(async () => {
+				const [testUser1Result, testUser2Result] = await Promise.all([createUser(), createUser()]);
+
+				testUser1 = testUser1Result;
+				testUser2 = testUser2Result;
+			});
+
+			beforeEach(async () => {
+				const createTeamPromise = createTeam(credentials, `test-team-name${Date.now()}`, 0);
+				const createRoomPromise = createRoom({ name: `test-room-name${Date.now()}`, type: 'c' });
+				const [testTeamCreationResult, testRoomCreationResult] = await Promise.all([createTeamPromise, createRoomPromise]);
+
+				testTeam = testTeamCreationResult;
+				createdRoom = testRoomCreationResult;
+
+				await request
+					.post(api('teams.addRooms'))
+					.set(credentials)
+					.expect(200)
+					.send({
+						rooms: [createdRoom.body.channel._id],
+						teamName: testTeam.name,
+					});
+			});
+
+			afterEach(() =>
+				Promise.all([deleteTeam(credentials, testTeam.name), deleteRoom({ roomId: createdRoom.body.channel._id, type: 'c' })]),
+			);
+
+			after(() => Promise.all([updateSetting('API_User_Limit', 500), deleteUser(testUser1), deleteUser(testUser2)]));
+
+			it('should add members when the members count is less than or equal to the API_User_Limit setting', async () => {
+				await updateSetting('API_User_Limit', 2);
+
+				await addMembers(credentials, testTeam.name, [testUser1._id, testUser2._id]);
+				await request
+					.post(api('teams.updateRoom'))
+					.set(credentials)
+					.send({
+						roomId: createdRoom.body.channel._id,
+						isDefault: true,
+					})
+					.expect(200)
+					.expect((res) => {
+						expect(res.body).to.have.property('success', true);
+						expect(res.body).to.have.nested.property('room.usersCount').and.to.be.equal(3);
+					});
+			});
+
+			it('should not add all members when we update a team channel to be auto-join and the members count is greater than the API_User_Limit setting', async () => {
+				await updateSetting('API_User_Limit', 1);
+
+				await addMembers(credentials, testTeam.name, [testUser1._id, testUser2._id]);
+				await request
+					.post(api('teams.updateRoom'))
+					.set(credentials)
+					.send({
+						roomId: createdRoom.body.channel._id,
+						isDefault: true,
+					})
+					.expect(200)
+					.expect((res) => {
+						expect(res.body).to.have.property('success', true);
+						expect(res.body).to.have.nested.property('room.usersCount').and.to.be.equal(2);
+					});
 			});
 		});
 	});
