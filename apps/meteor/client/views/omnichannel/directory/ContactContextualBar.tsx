@@ -1,4 +1,4 @@
-import { useRoute, useRouteParameter, useRouter, useTranslation } from '@rocket.chat/ui-contexts';
+import { useRoute, useRouteParameter, useTranslation } from '@rocket.chat/ui-contexts';
 import React, { useMemo } from 'react';
 
 import {
@@ -8,9 +8,9 @@ import {
 	ContextualbarTitle,
 	ContextualbarClose,
 } from '../../../components/Contextualbar';
-import ContactInfo from '../contactInfo/ContactInfo';
-import ContactNewEdit from '../contactInfo/EditContactInfo';
-import ContactEditWithData from '../contactInfo/EditContactInfoWithData';
+import ContactInfo from './contacts/contactInfo/ContactInfo';
+import EditContactInfo from './contacts/contactInfo/EditContactInfo';
+import EditContactInfoWithData from './contacts/contactInfo/EditContactInfoWithData';
 
 const HEADER_OPTIONS = {
 	new: { icon: 'user', title: 'New_contact' },
@@ -26,35 +26,30 @@ const ContactContextualBar = () => {
 	const directoryRoute = useRoute('omnichannel-directory');
 	const bar = (useRouteParameter('bar') || 'info') as BarOptions;
 	const contactId = useRouteParameter('id') || '';
+	const context = useRouteParameter('context');
 
-	const { getRouteParameters } = useRouter();
-	const params = getRouteParameters();
-
-	const handleContactsContextualbarCloseButtonClick = () => {
-		directoryRoute.push({ page: 'contacts' });
+	const handleClose = () => {
+		directoryRoute.push({ tab: 'contacts' });
 	};
 
-	const handleContactsContextualbarBackButtonClick = () => {
-		directoryRoute.push({ page: 'contacts', id: contactId, bar: 'info' });
+	const handleCancel = () => {
+		directoryRoute.push({ tab: 'contacts', context: 'info', id: contactId });
 	};
 
 	const header = useMemo(() => HEADER_OPTIONS[bar] || HEADER_OPTIONS.info, [bar]);
 
-	console.log(params);
-
-	// return (
-	// 	<Contextualbar>
-	// 		<ContextualbarHeader>
-	// 			<ContextualbarIcon name={header.icon} />
-	// 			<ContextualbarTitle>{t(header.title)}</ContextualbarTitle>
-	// 			<ContextualbarClose onClick={handleContactsContextualbarCloseButtonClick} />
-	// 		</ContextualbarHeader>
-	// 		{bar === 'new' && <ContactNewEdit id={contactId} close={handleContactsContextualbarCloseButtonClick} />}
-	// 		{bar === 'edit' && <ContactEditWithData id={contactId} close={handleContactsContextualbarBackButtonClick} />}
-
-	// 	</Contextualbar>
-	// );
-	return <ContactInfo id={contactId} />;
+	return (
+		<Contextualbar>
+			<ContextualbarHeader>
+				<ContextualbarIcon name={header.icon} />
+				<ContextualbarTitle>{t(header.title)}</ContextualbarTitle>
+				<ContextualbarClose onClick={handleClose} />
+			</ContextualbarHeader>
+			{context === 'new' && <EditContactInfo id={contactId} onCancel={handleClose} />}
+			{context === 'edit' && <EditContactInfoWithData id={contactId} onCancel={handleCancel} />}
+			{context !== 'new' && context !== 'edit' && <ContactInfo id={contactId} />}
+		</Contextualbar>
+	);
 };
 
 export default ContactContextualBar;
