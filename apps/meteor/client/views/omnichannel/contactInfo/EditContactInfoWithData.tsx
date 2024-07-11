@@ -24,7 +24,7 @@ const EditContactInfoWithData = ({ id, onClose, onCancel }: { id: string; onClos
 		return <Box mbs={16}>{t('Contact_not_found')}</Box>;
 	}
 
-	return <EditContactInfo id={id} data={data} onClose={onClose} onCancel={onCancel} />;
+	return <EditContactInfo id={id} contactData={data} onClose={onClose} onCancel={onCancel} />;
 };
 
 export default EditContactInfoWithData;

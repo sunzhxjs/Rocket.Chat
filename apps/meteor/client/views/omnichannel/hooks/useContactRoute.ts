@@ -1,34 +1,14 @@
+import type { RouteParameters } from '@rocket.chat/ui-contexts';
 import { useRouter } from '@rocket.chat/ui-contexts';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 
 export const useContactRoute = () => {
 	const { navigate, getRouteParameters, getRouteName } = useRouter();
 	const currentRouteName = getRouteName();
 	const currentParams = getRouteParameters();
 
-	// if (route) {
-	// 	router.navigate({
-	// 		name: route,
-	// 		params: {
-	// 			tab: 'contact-profile',
-	// 			context: 'edit',
-	// 			id: roomId,
-	// 		},
-	// 	});
-	// 	return;
-	// }
-
-	// router.navigate({
-	// 	name: 'omnichannel-directory',
-	// 	params: {
-	// 		page: 'contacts',
-	// 		id: contactId,
-	// 		bar: 'edit',
-	// 	},
-	// });
-
 	const handleNavigate = useCallback(
-		(param: string) => {
+		(params: RouteParameters) => {
 			if (!currentRouteName) {
 				return;
 			}
@@ -37,9 +17,9 @@ export const useContactRoute = () => {
 				return navigate({
 					name: currentRouteName,
 					params: {
-						// page: 'contacts',
 						...currentParams,
-						bar: param,
+						tab: 'contacts',
+						...params,
 					},
 				});
 			}
@@ -48,12 +28,18 @@ export const useContactRoute = () => {
 				name: currentRouteName,
 				params: {
 					...currentParams,
-					context: param,
+					...params,
 				},
 			});
 		},
 		[navigate, currentParams, currentRouteName],
 	);
+
+	useEffect(() => {
+		if (!currentParams.context) {
+			handleNavigate({ context: 'details' });
+		}
+	}, [currentParams.context, handleNavigate]);
 
 	return handleNavigate;
 };

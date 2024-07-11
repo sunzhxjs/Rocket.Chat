@@ -2,10 +2,10 @@ import { Box } from '@rocket.chat/fuselage';
 import { useTranslation } from '@rocket.chat/ui-contexts';
 import React from 'react';
 
-import { ContextualbarScrollableContent } from '../../../../components/Contextualbar';
-import { OmnichannelRoomIcon } from '../../../../components/RoomIcon/OmnichannelRoomIcon';
-import { useFormatDate } from '../../../../hooks/useFormatDate';
-import { useOmnichannelRoom } from '../../../room/contexts/RoomContext';
+import { ContextualbarScrollableContent, ContextualbarEmptyContent } from '../../../../components/Contextualbar';
+// import { OmnichannelRoomIcon } from '../../../../components/RoomIcon/OmnichannelRoomIcon';
+// import { useFormatDate } from '../../../../hooks/useFormatDate';
+// import { useOmnichannelRoom } from '../../../room/contexts/RoomContext';
 import ContactInfoHistoryItem from '../components/ContactInfoHistoryItem';
 
 const dummyData = [
@@ -31,11 +31,16 @@ const dummyData = [
 ];
 
 const ContactInfoChannels = () => {
-	// const t = useTranslation();
+	const t = useTranslation();
 	// const room = useOmnichannelRoom();
 	// const formatDate = useFormatDate();
 
 	const blockedContacts = dummyData.filter((data) => data.block);
+	const isEmpty = false;
+
+	if (isEmpty) {
+		return <ContextualbarEmptyContent icon='balloon' title={t('No_channels_yet')} subtitle={t('No_channels_yet_description')} />;
+	}
 
 	return (
 		<ContextualbarScrollableContent>

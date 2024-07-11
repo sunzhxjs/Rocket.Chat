@@ -1,33 +1,12 @@
-import { Box, Tabs, TabsItem } from '@rocket.chat/fuselage';
-import { useEffectEvent } from '@rocket.chat/fuselage-hooks';
+import { Box, IconButton, Tabs, TabsItem } from '@rocket.chat/fuselage';
 import { UserAvatar } from '@rocket.chat/ui-avatar';
 import type { RouteName } from '@rocket.chat/ui-contexts';
-import {
-	useToastMessageDispatch,
-	useRoute,
-	useTranslation,
-	useEndpoint,
-	usePermission,
-	useRouter,
-	useRouteParameter,
-} from '@rocket.chat/ui-contexts';
+import { useTranslation, useEndpoint, usePermission, useRouter, useRouteParameter } from '@rocket.chat/ui-contexts';
 import { useQuery } from '@tanstack/react-query';
-import React, { useState } from 'react';
+import React from 'react';
 
 import { ContextualbarHeader, ContextualbarIcon, ContextualbarTitle, ContextualbarClose } from '../../../components/Contextualbar';
-import GenericMenu from '../../../components/GenericMenu/GenericMenu';
-import type { GenericMenuItemProps } from '../../../components/GenericMenu/GenericMenuItem';
-// import { UserStatus } from '../../../components/UserStatus';
-// import { useIsCallReady } from '../../../contexts/CallContext';
 import { useFormatDate } from '../../../hooks/useFormatDate';
-import { parseOutboundPhoneNumber } from '../../../lib/voip/parseOutboundPhoneNumber';
-import ContactManagerInfo from '../../../omnichannel/ContactManagerInfo';
-import { useRoomToolbox } from '../../room/contexts/RoomToolboxContext';
-import AgentInfoDetails from '../components/AgentInfoDetails';
-import CustomField from '../components/CustomField';
-import Field from '../components/Field';
-import Info from '../components/Info';
-import Label from '../components/Label';
 import { FormSkeleton } from '../directory/components/FormSkeleton';
 import { useContactRoute } from '../hooks/useContactRoute';
 import ContactInfoChannels from './tabs/ContactInfoChannels';
@@ -41,20 +20,15 @@ type ContactInfoProps = {
 	route?: RouteName;
 };
 
-type ContactInfoTabs = 'details' | 'channels' | 'history' | 'edit';
-
-const ContactInfo = ({ id: contactId, onClose, rid: roomId = '', route }: ContactInfoProps) => {
+const ContactInfo = ({ id: contactId, onClose }: ContactInfoProps) => {
 	const t = useTranslation();
-	const [contactTab, setContactTab] = useState<ContactInfoTabs>('details');
-
-	const liveRoute = useRoute('live');
 
 	const { getRouteName } = useRouter();
 	const currentRouteName = getRouteName();
 	const handleNavigate = useContactRoute();
+	const context = useRouteParameter('context');
 
 	const formatDate = useFormatDate();
-	// const isCallReady = useIsCallReady();
 
 	const canViewCustomFields = usePermission('view-livechat-room-customfields');
 	const canEditContact = usePermission('edit-omnichannel-contact');
@@ -83,9 +57,9 @@ const ContactInfo = ({ id: contactId, onClose, rid: roomId = '', route }: Contac
 		return <Box mbs={16}>{t('Contact_not_found')}</Box>;
 	}
 
-	const { username, visitorEmails, phone, ts, livechatData, lastChat, contactManager, status } = contact;
+	const { username, visitorEmails, phone, ts, livechatData, lastChat, contactManager } = contact;
 
-	const showContactHistory = currentRouteName === 'live' && lastChat;
+	const showContactHistory = (currentRouteName === 'live' || currentRouteName === 'omnichannel-directory') && lastChat;
 
 	const [{ phoneNumber = '' }] = phone ?? [{}];
 	const [{ address: email = '' }] = visitorEmails ?? [{}];
@@ -95,31 +69,12 @@ const ContactInfo = ({ id: contactId, onClose, rid: roomId = '', route }: Contac
 		return field?.visibility === 'visible' && field?.scope === 'visitor';
 	};
 
-	const onChatHistory = () => {
-		const { _id = '' } = lastChat ?? {};
-		liveRoute.push({ id: _id, tab: 'contact-chat-history' });
-	};
-
 	// Serialized does not like unknown :(
 	const customFieldEntries = canViewCustomFields
 		? Object.entries((livechatData ?? {}) as unknown as Record<string, string>).filter(
 				([key, value]) => checkIsVisibleAndScopeVisitor(key) && value,
 		  )
 		: [];
-
-	const editMenuItem: GenericMenuItemProps = {
-		id: 'edit',
-		icon: 'pencil',
-		content: 'Edit',
-		onClick: () => handleNavigate('edit'),
-		disabled: !canEditContact,
-	};
-
-	const blockMenuItem: GenericMenuItemProps = {
-		id: 'block',
-		icon: 'ban',
-		content: 'Block',
-	};
 
 	return (
 		<>
@@ -138,36 +93,40 @@ const ContactInfo = ({ id: contactId, onClose, rid: roomId = '', route }: Contac
 								{lastChat && <Box fontScale='c1'>{`${t('Last_Chat')}: ${formatDate(lastChat.ts)}`}</Box>}
 							</Box>
 						</Box>
-						<GenericMenu title='test' detached items={[editMenuItem, blockMenuItem]} />
+						<IconButton
+							disabled={!canEditContact}
+							title={canEditContact ? t('Edit') : t('Not_authorized')}
+							small
+							icon='pencil'
+							onClick={() => handleNavigate({ context: 'edit' })}
+						/>
 					</Box>
 				)}
 			</Box>
 			<Tabs>
-				<TabsItem onClick={() => setContactTab('details')} selected={contactTab === 'details'}>
-					Details
+				<TabsItem onClick={() => handleNavigate({ context: 'details' })} selected={context === 'details'}>
+					{t('Details')}
 				</TabsItem>
-				<TabsItem onClick={() => setContactTab('channels')} selected={contactTab === 'channels'}>
-					Channels
+				<TabsItem onClick={() => handleNavigate({ context: 'channels' })} selected={context === 'channels'}>
+					{t('Channels')}
 				</TabsItem>
 				{showContactHistory && (
-					<TabsItem onClick={() => setContactTab('history')} selected={contactTab === 'history'}>
-						History
+					<TabsItem onClick={() => handleNavigate({ context: 'history' })} selected={context === 'history'}>
+						{t('History')}
 					</TabsItem>
 				)}
 			</Tabs>
-			{contactTab === 'details' && <ContactInfoDetails phoneNumber={phoneNumber} email={email} customFieldEntries={customFieldEntries} />}
-			{contactTab === 'channels' && <ContactInfoChannels />}
-			{contactTab === 'history' && showContactHistory && <ContactInfoHistory />}
-			{/* <Divider /> */}
-
-			{/* {isCallReady && (
-				<ButtonGroup stretch>
-					<>
-						<VoipInfoCallButton phoneNumber={phoneNumber} />
-						{showContactHistory && <Divider width='100%' />}
-					</>
-				</ButtonGroup>
-			)} */}
+			{context === 'details' && (
+				<ContactInfoDetails
+					ts={ts}
+					contactManager={contactManager}
+					phoneNumber={phoneNumber}
+					email={email}
+					customFieldEntries={customFieldEntries}
+				/>
+			)}
+			{context === 'channels' && <ContactInfoChannels />}
+			{context === 'history' && showContactHistory && <ContactInfoHistory />}
 		</>
 	);
 };

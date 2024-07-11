@@ -39,6 +39,10 @@ const ContactInfoHistory = () => {
 
 	const { phase, error, items: history, itemCount: totalItemCount } = useRecordList(historyList);
 
+	if (totalItemCount === 0) {
+		return <ContextualbarEmptyContent icon='history' title={t('No_history_yet')} subtitle={t('No_history_yet_description')} />;
+	}
+
 	return (
 		<ContextualbarContent paddingInline={0}>
 			<Box
