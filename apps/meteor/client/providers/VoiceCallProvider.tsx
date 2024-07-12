@@ -18,7 +18,7 @@ import { useVoipSounds } from './OmnichannelCallProvider/hooks/useVoipSounds';
 // eslint-disable-next-line react/no-multi-comp
 const VoiceCallProvider: FC<{ children: ReactNode }> = ({ children }) => {
 	// Settings
-	const isVoipEnabled = useSetting<boolean>('VoIP_Enabled') || false;
+	const isVoipEnabled = useSetting<boolean>('VoIP_TeamCollab_Enabled') || false;
 
 	// Hooks
 	const voipSounds = useVoipSounds();
