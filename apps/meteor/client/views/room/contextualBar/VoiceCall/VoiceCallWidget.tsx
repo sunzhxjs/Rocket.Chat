@@ -3,13 +3,13 @@ import { Button } from '@rocket.chat/fuselage';
 import { useTranslation } from '@rocket.chat/ui-contexts';
 import React, { useState } from 'react';
 
-import { useVoiceCallAPI, useVoiceCallDialer, useVoiceCallSession } from '../../../../contexts/VoiceCallContext';
 import type {
+	VoiceCallErrorSession,
 	VoiceCallIncomingSession,
 	VoiceCallOngoingSession,
 	VoiceCallOutgoingSession,
-	VoiceCallErrorSession,
-} from '../../../../lib/voip-freeswitch/VoIPClient';
+} from '../../../../contexts/VoiceCallContext';
+import { useVoiceCallAPI, useVoiceCallDialer, useVoiceCallSession } from '../../../../contexts/VoiceCallContext';
 import { Actions, Container, DialPad, Footer, Header, Timer } from './components';
 import VoiceCallId from './components/CallIdentifier';
 import SettingsButton from './components/CallSettingsButton';

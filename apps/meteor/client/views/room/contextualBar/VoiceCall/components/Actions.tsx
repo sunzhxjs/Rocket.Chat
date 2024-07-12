@@ -2,7 +2,7 @@ import { Box, IconButton } from '@rocket.chat/fuselage';
 import { useTranslation } from '@rocket.chat/ui-contexts';
 import React from 'react';
 
-import type { VoiceCallSession } from '../../../../../lib/voip-freeswitch/VoIPClient';
+import type { VoiceCallSession } from '../../../../../contexts/VoiceCallContext';
 
 type VoiceCallActionsProps = {
 	session?: VoiceCallSession;
