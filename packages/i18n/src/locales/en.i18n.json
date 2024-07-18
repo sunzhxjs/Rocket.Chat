@@ -6483,5 +6483,7 @@
   "Workspace_and_user_settings": "Workspace and user settings",
   "Sidebar_Sections_Order": "Sidebar sections order",
   "Sidebar_Sections_Order_Description": "Select the categories in your preferred order",
-  "Incoming_Calls": "Incoming calls"
+  "Incoming_Calls": "Incoming calls",
+  "Sidepanel_navigation": "Sidepanel navigation for teams",
+  "Sidepanel_navigation_description": "Option to open a sidepanel with channels and/or discussions associated with the team. This allows team owners to customize communication methods to best meet their team’s needs. This feature is only available when Enhanced navigation experience is enabled."
 }
