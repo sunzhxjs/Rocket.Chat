@@ -2049,7 +2049,8 @@ export class LivechatRoomsRaw extends BaseRaw<IOmnichannelRoom> implements ILive
 		if (message.token) {
 			// update visitor timestamp, only if its not a system message
 			if (!message.t) {
-				update.$set['v.lastMessageTs'] = message.ts;
+				// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+				update.$set!['v.lastMessageTs'] = message.ts;
 			}
 
 			// update visitor timestamp, only if its new inquiry and not continuing message
